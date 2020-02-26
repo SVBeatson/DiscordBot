@@ -3,10 +3,9 @@ const { token, nasa } = require("./token")
 const { prefix, name } = require("./config")
 const libraryHours = require("./libraryhours")
 const fetch = require('node-fetch')
-const Jikan = require('jikan-node')
 
 const client = new Discord.Client()
-
+let activePoll = false
 
 client.on('ready', function() {
     console.log("Hello Im alive!")
@@ -14,18 +13,11 @@ client.on('ready', function() {
 
 // Event listener for new message
 client.on('message', async function(message) {
-    // const content = message.content
-    // const messagePrefix = content.charAt(0) 
     
     if (!message.content.startsWith(prefix) || message.author.bot) return;
 
 	const args = message.content.slice(prefix.length).split(/ +/);
     const command = args.shift().toLowerCase();
-    
-    // if (prefix !== messagePrefix)
-    //     return 
-
-    //const command = content.substring(1)
 
     if (command === 'hello') {
         message.channel.send('How do you do, fellow humans')
@@ -119,13 +111,11 @@ client.on('message', async function(message) {
     if (command === 'food') {
         const {meals} = await fetch('https://www.themealdb.com/api/json/v1/1/random.php').then(response => response.json())
 
-        console.log(meals[0])
-
         const embed = new Discord.RichEmbed()
         .setDescription(meals[0].strMeal)
         .addField('Category', meals[0].strCategory)
         .addField('Culture', meals[0].strArea)
-        .addField('Link', meals[0].strSource)
+        .addField('Link', (meals[0].strSource) ? meals[0].strSource : meals[0].strYoutube)
         .setThumbnail(meals[0].strMealThumb)
 
         message.channel.send(embed)
@@ -139,7 +129,64 @@ client.on('message', async function(message) {
 
         message.channel.send(embed)
     }
+
+    if (command === 'poll') {
+
+        if (args.length == 1 && args[0] === 'stop') {
+            if (activePoll == false){
+                message.reply('There is no active poll. Try making one with !poll')
+                return
+            }
+    
+            pollCollector.stop()
+            activePoll = false
+            return
+        }
+        if (args.length < 2) {
+            message.reply('Proper Syntax: !poll [title] [options...]')
+            return
+        }
+        if (args.length > 11) {
+            message.reply('!poll supports a maximum of 10 poll options\n Options given: ' + (args.length - 1))
+            return
+        }
+        const embed = new Discord.RichEmbed()
+        .setDescription(args[0])
+        .setColor('blue')
+        for (let i = 1 ; i <args.length; ++i) {
+            embed.addField(numbers[i], args[i], true)
+        }
+
+        const poll = await message.channel.send(embed)
+        for (let i = 1; i < args.length; ++i) {
+            await poll.react(numbers[i])
+        } 
+        
+        const filter = (reaction) => {
+            return numbers.includes(reaction.emoji.name)
+        };
+
+        pollCollector = poll.createReactionCollector(filter)
+        activePoll = true;
+
+        pollCollector.on('collect', (reaction, reactionCollector) => {
+            console.log(`Collected ${reaction.emoji.name}`);
+        });
+
+        pollCollector.on('end', collected => {
+            console.log(`Collected ${collected.size} items`);
+            collected.sort()
+            results = collected.array()
+            console.log(results)
+           // message.channel.send('The winner of the poll is:' + results[0])
+        });
+
+
+    }
+
 });
+
+const numbers = ['0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
 
 client.on('guildMemberAdd', member => {
     // Send the message to a designated channel on a server:
@@ -149,7 +196,6 @@ client.on('guildMemberAdd', member => {
     // Send the message, mentioning the member
     channel.send(`Welcome to the server, ${member}`);
 });
-  
 
 client.login(token);
 
